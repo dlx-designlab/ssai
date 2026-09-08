@@ -1,7 +1,7 @@
 # DLX AI configuration
 # Keep prototype parameters here so the main program logic stays simple.
 
-PROGRAM_NAME = "DLX AI"
+PROGRAM_NAME = "DLX A"
 PROGRAM_VERSION = "0.1.0"
 PROGRAM_DESCRIPTION = "Local AI prototype for Raspberry Pi"
 AI_TITLE = "Dedicated Local AI"
