@@ -42,11 +42,11 @@ def read_status(path: Path) -> dict | None:
 
 def render(status: dict | None) -> None:
     clear_terminal()
-    print(f"{config.PROGRAM_NAME}  v{config.PROGRAM_VERSION}")
+    print(f"{config.PROGRAM_NAME}  {config.PROGRAM_VERSION}")
     print("=" * 42)
 
     if status is None:
-        print("Status: waiting for main DLX AI process...")
+        print("Status: waiting for main SSAI process...")
         return
 
     hardware = status.get("hardware", {})
@@ -81,7 +81,7 @@ def main() -> None:
             time.sleep(config.CONTROL_REFRESH_INTERVAL)
     except KeyboardInterrupt:
         clear_terminal()
-        print("DLX AI control closed.")
+        print("SSAI control closed.")
 
 
 if __name__ == "__main__":

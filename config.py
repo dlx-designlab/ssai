@@ -1,8 +1,8 @@
-# DLX AI configuration
+# SSAI configuration
 # Keep prototype parameters here so the main program logic stays simple.
 
-PROGRAM_NAME = "DLX A"
-PROGRAM_VERSION = "0.1.0"
+PROGRAM_NAME = "SSAI"
+PROGRAM_VERSION = "V4"
 PROGRAM_DESCRIPTION = "Local AI prototype for Raspberry Pi"
 AI_TITLE = "Dedicated Local AI"
 
@@ -16,7 +16,7 @@ GENERATION_SHUTDOWN_TIMEOUT = 1.0
 # Hardware monitoring / SSH control interface
 # The current prototype samples and refreshes control data every 15 seconds.
 HARDWARE_SAMPLE_INTERVAL = 15.0
-STATUS_FILE = "/tmp/dlx_ai_status.json"
+STATUS_FILE = "/tmp/ssai_status.json"
 CONTROL_REFRESH_INTERVAL = 15.0
 STATUS_STALE_AFTER_SECONDS = 45
 

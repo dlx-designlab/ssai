@@ -13,7 +13,7 @@ from llm_manager import LLMManager, ModelMetrics
 from status_store import StatusStore
 
 
-class DLXApplication:
+class SSAIApplication:
     """Coordinates the GUI, local LLM, hardware monitor and SSH status data."""
 
     def __init__(self):
@@ -74,7 +74,7 @@ class DLXApplication:
         self.generation_thread = threading.Thread(
             target=self._generation_loop,
             args=(prompt,),
-            name="dlx-generation-loop",
+            name="ssai-generation-loop",
             daemon=True,
         )
         self.generation_thread.start()
@@ -107,7 +107,7 @@ class DLXApplication:
     def _start_background_thread(self) -> None:
         self.background_thread = threading.Thread(
             target=self._background_loop,
-            name="dlx-monitor-loop",
+            name="ssai-monitor-loop",
             daemon=True,
         )
         self.background_thread.start()
@@ -158,7 +158,7 @@ class DLXApplication:
 
 
 def main() -> None:
-    DLXApplication().run()
+    SSAIApplication().run()
 
 
 if __name__ == "__main__":
