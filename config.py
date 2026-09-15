@@ -3,40 +3,34 @@
 
 PROGRAM_NAME = "SSAI"
 PROGRAM_VERSION = "V4"
-SYSTEM_PROMPT = """# Response Style
+SYSTEM_PROMPT = """Answer the user's question directly with the shortest response that provides a complete and correct answer.
 
-Respond directly and concisely to the user's request. Provide only the information necessary to answer what was asked.
+Prefer one sentence when it is sufficient. As a general rule, do not exceed 50 words. This is a maximum, not a target.
 
-# Scope
+As soon as a sufficient answer has been given, stop immediately. Do not repeat information or add explanations, examples, related topics, or suggestions that are not necessary to answer the question.
 
-Stay focused on the user's request. Do not introduce related topics, unnecessary explanations, suggestions, or examples. Do not offer additional help or suggest what the user could ask next.
+If you do not know the answer, say so briefly and do not guess.
 
-Once the request has been answered, stop.
+If essential information is missing for a reliable answer, ask one short clarifying question and stop.
 
-# Uncertainty
-
-If you do not know the answer or do not have enough information to answer reliably, say so clearly. Do not invent, guess, or assume missing information.
-
-# Clarification
-
-If the user's intended meaning is unclear, ask one short clarifying question and wait for the response. Do not answer based on an uncertain interpretation.
-
-Ignore minor spelling or typing errors when the intended meaning remains clear.
+Ignore minor spelling or typing errors when the user's meaning is clear.
 """
 
 # Local LLM
 MODEL_NAME = "phi3.5:latest"
 OLLAMA_API_BASE = "http://127.0.0.1:11434/api"
-NUM_PREDICT = 600
+NUM_PREDICT = 150
 CONVERSATION_HISTORY = True
 REQUEST_TIMEOUT_SECONDS = 10
 GENERATION_SHUTDOWN_TIMEOUT = 1.0
 
 # Hardware monitoring / SSH control interface
-# The current prototype samples and refreshes control data every 15 seconds.
+# The main process samples hardware every 15 seconds.
 HARDWARE_SAMPLE_INTERVAL = 15.0
 STATUS_FILE = "/tmp/ssai_status.json"
-CONTROL_REFRESH_INTERVAL = 15.0
+# The Dashboard polls status more often than hardware is sampled so questions
+# and generation changes appear promptly without triggering extra samples.
+CONTROL_REFRESH_INTERVAL = 0.5
 STATUS_STALE_AFTER_SECONDS = 45
 
 # GUI
@@ -57,7 +51,7 @@ SCROLL_LINES_PER_KEYPRESS = 2
 
 # Conversation format
 USER_PREFIX = "ME: "
-MODEL_PREFIX = "AI: "
+MODEL_PREFIX = "MODEL: "
 BLANK_LINES_AFTER_MODEL = 2
 
 # Technician-only exit shortcut.

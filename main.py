@@ -59,11 +59,17 @@ class SSAIApplication:
         if self.generation_active:
             return False
 
+        self.status_store.submit_question(prompt)
         self.gui.add_user_message(prompt)
         self.gui.start_model_message()
 
         if not self.llm_manager.metrics.available:
             self.gui.show_model_error("Model unavailable")
+            self.status_store.complete_turn(
+                answer=None,
+                success=False,
+                error="model_unavailable",
+            )
             return True
 
         self._start_generation(prompt)
@@ -83,6 +89,7 @@ class SSAIApplication:
         assert self.gui is not None
         generation_completed = False
         error_reported = False
+        response_parts: list[str] = []
 
         try:
             for chunk in self.llm_manager.stream_response(
@@ -91,21 +98,37 @@ class SSAIApplication:
             ):
                 if self.stop_event.is_set():
                     return
+                response_parts.append(chunk)
                 self.gui.queue_model_chunk(chunk)
 
             if not self.stop_event.is_set():
                 self.gui.queue_model_complete()
                 generation_completed = True
+                self.status_store.complete_turn(
+                    answer="".join(response_parts),
+                    success=True,
+                )
 
         except requests.RequestException:
             if not self.stop_event.is_set():
                 self.gui.queue_model_error("Model error")
                 error_reported = True
             self._update_model_status(self.llm_manager.metrics)
+            if not self.stop_event.is_set():
+                self.status_store.complete_turn(
+                    answer="".join(response_parts) or None,
+                    success=False,
+                    error="communication_error",
+                )
         finally:
             if not generation_completed and not error_reported and not self.stop_event.is_set():
                 self.gui.queue_model_error("Model error")
-                self.generation_active = False
+                self.status_store.complete_turn(
+                    answer="".join(response_parts) or None,
+                    success=False,
+                    error="generation_error",
+                )
+            self.generation_active = False
 
     def _generation_finished(self) -> None:
         # Called by the GUI only after the final model event and spacing have
