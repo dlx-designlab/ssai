@@ -3,12 +3,31 @@
 
 PROGRAM_NAME = "SSAI"
 PROGRAM_VERSION = "V4"
-PROGRAM_DESCRIPTION = "Local AI prototype for Raspberry Pi"
-AI_TITLE = "Dedicated Local AI"
+SYSTEM_PROMPT = """# Response Style
+
+Respond directly and concisely to the user's request. Provide only the information necessary to answer what was asked.
+
+# Scope
+
+Stay focused on the user's request. Do not introduce related topics, unnecessary explanations, suggestions, or examples. Do not offer additional help or suggest what the user could ask next.
+
+Once the request has been answered, stop.
+
+# Uncertainty
+
+If you do not know the answer or do not have enough information to answer reliably, say so clearly. Do not invent, guess, or assume missing information.
+
+# Clarification
+
+If the user's intended meaning is unclear, ask one short clarifying question and wait for the response. Do not answer based on an uncertain interpretation.
+
+Ignore minor spelling or typing errors when the intended meaning remains clear.
+"""
 
 # Local LLM
 MODEL_NAME = "phi3.5:latest"
 OLLAMA_API_BASE = "http://127.0.0.1:11434/api"
+NUM_PREDICT = 600
 CONVERSATION_HISTORY = True
 REQUEST_TIMEOUT_SECONDS = 10
 GENERATION_SHUTDOWN_TIMEOUT = 1.0
@@ -25,6 +44,7 @@ FULLSCREEN = True
 WINDOW_WIDTH = 480
 WINDOW_HEIGHT = 320
 WINDOW_BACKGROUND = "black"
+CONVERSATION_SEPARATOR = "------------------------------"
 TEXT_BACKGROUND = "black"
 TEXT_FOREGROUND = "white"
 INPUT_BACKGROUND = "black"

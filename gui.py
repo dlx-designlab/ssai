@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import queue
 import tkinter as tk
+import tkinter.font as tkfont
 from collections.abc import Callable
 
 import config
@@ -43,8 +44,14 @@ class ConversationGUI:
     def _build_widgets(self) -> None:
         font = (config.CHAT_FONT_FAMILY, config.CHAT_FONT_SIZE)
 
+        input_frame = tk.Frame(self.root, bg=config.INPUT_BACKGROUND)
+        input_frame.pack(fill="x", side="bottom")
+
+        transcript_frame = tk.Frame(self.root, bg=config.TEXT_BACKGROUND)
+        transcript_frame.pack(fill="both", expand=True)
+
         self.transcript = tk.Text(
-            self.root,
+            transcript_frame,
             wrap="word",
             bg=config.TEXT_BACKGROUND,
             fg=config.TEXT_FOREGROUND,
@@ -58,10 +65,37 @@ class ConversationGUI:
             state="disabled",
             takefocus=False,
         )
-        input_frame = tk.Frame(self.root, bg=config.INPUT_BACKGROUND)
-        input_frame.pack(fill="x", side="bottom")
+        self.scroll_indicator = tk.Canvas(
+            transcript_frame,
+            width=8,
+            bg=config.TEXT_BACKGROUND,
+            highlightthickness=0,
+            borderwidth=0,
+            takefocus=False,
+        )
 
+        self.scroll_indicator.pack(fill="y", side="right")
         self.transcript.pack(fill="both", expand=True)
+        self.scroll_indicator.bind("<Configure>", self._update_scroll_indicator)
+        ctx_font = tkfont.Font(
+            self.root,
+            family=config.CHAT_FONT_FAMILY,
+            size=config.CHAT_FONT_SIZE,
+            overstrike=not config.CONVERSATION_HISTORY,
+        )
+        self.ctx_indicator = tk.Label(
+            transcript_frame,
+            text="CTX",
+            bg=config.TEXT_BACKGROUND,
+            fg=config.TEXT_FOREGROUND,
+            font=ctx_font,
+        )
+        self.ctx_indicator.place(
+            relx=1.0,
+            x=-config.DISPLAY_MARGIN,
+            y=config.DISPLAY_MARGIN,
+            anchor="ne",
+        )
 
         self.input_prefix = tk.Label(
             input_frame,
@@ -125,6 +159,7 @@ class ConversationGUI:
         self.transcript.delete("1.0", "end")
         self.transcript.configure(state="disabled")
         self.follow_output = True
+        self._update_scroll_indicator()
 
     def _process_stream_queue(self) -> None:
         # Coalesce chunks that arrived during the same GUI tick. This keeps the
@@ -169,7 +204,9 @@ class ConversationGUI:
         # N blank lines between the model response and the next YOU line require
         # N + 1 newline characters after the response text.
         newline_count = config.BLANK_LINES_AFTER_MODEL + 1
-        self._append_transcript("\n" * newline_count)
+        self._append_transcript(
+            f"\n{config.CONVERSATION_SEPARATOR}\n" + "\n" * newline_count
+        )
 
     def _append_transcript(self, text: str) -> None:
         self.transcript.configure(state="normal")
@@ -178,10 +215,31 @@ class ConversationGUI:
 
         if self.follow_output:
             self.transcript.see("end")
+        self._update_scroll_indicator()
+
+    def _update_scroll_indicator(self, _event=None) -> None:
+        top, bottom = self.transcript.yview()
+        position = (top + bottom) / 2
+        height = self.scroll_indicator.winfo_height()
+        radius = 3
+        margin = radius
+        center_y = margin + position * max(height - 2 * margin, 0)
+        center_y = max(radius, min(center_y, max(height - radius, radius)))
+
+        self.scroll_indicator.delete("all")
+        self.scroll_indicator.create_oval(
+            4 - radius,
+            center_y - radius,
+            4 + radius,
+            center_y + radius,
+            fill="white",
+            outline="white",
+        )
 
     def _scroll_up(self, _event=None):
         self.follow_output = False
         self.transcript.yview_scroll(-config.SCROLL_LINES_PER_KEYPRESS, "units")
+        self._update_scroll_indicator()
         return "break"
 
     def _scroll_down(self, _event=None):
@@ -191,6 +249,7 @@ class ConversationGUI:
         if bottom >= 0.999:
             self.follow_output = True
             self.transcript.see("end")
+        self._update_scroll_indicator()
         return "break"
 
     def _technician_exit(self, _event=None):

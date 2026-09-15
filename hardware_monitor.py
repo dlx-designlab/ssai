@@ -9,6 +9,8 @@ import config
 @dataclass
 class HardwareSnapshot:
     cpu_percent: float | None = None
+    ram_used_gb: float | None = None
+    ram_total_gb: float | None = None
     ram_percent: float | None = None
     temperature_c: float | None = None
 
@@ -18,9 +20,12 @@ class HardwareMonitor:
         self.temperature_path = Path(temperature_path)
 
     def read_snapshot(self) -> HardwareSnapshot:
+        ram_used_gb, ram_total_gb, ram_percent = self._read_ram()
         return HardwareSnapshot(
             cpu_percent=self._read_cpu_percent(),
-            ram_percent=self._read_ram_percent(),
+            ram_used_gb=ram_used_gb,
+            ram_total_gb=ram_total_gb,
+            ram_percent=ram_percent,
             temperature_c=self._read_temperature_c(),
         )
 
@@ -32,11 +37,16 @@ class HardwareMonitor:
             return None
 
     @staticmethod
-    def _read_ram_percent() -> float | None:
+    def _read_ram() -> tuple[float | None, float | None, float | None]:
         try:
-            return psutil.virtual_memory().percent
+            memory = psutil.virtual_memory()
+            return (
+                memory.used / (1024 ** 3),
+                memory.total / (1024 ** 3),
+                memory.percent,
+            )
         except Exception:
-            return None
+            return None, None, None
 
     def _read_temperature_c(self) -> float | None:
         try:

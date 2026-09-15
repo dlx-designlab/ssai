@@ -81,6 +81,8 @@ class SSAIApplication:
 
     def _generation_loop(self, prompt: str) -> None:
         assert self.gui is not None
+        generation_completed = False
+        error_reported = False
 
         try:
             for chunk in self.llm_manager.stream_response(
@@ -93,11 +95,17 @@ class SSAIApplication:
 
             if not self.stop_event.is_set():
                 self.gui.queue_model_complete()
+                generation_completed = True
 
         except requests.RequestException:
             if not self.stop_event.is_set():
                 self.gui.queue_model_error("Model error")
+                error_reported = True
             self._update_model_status(self.llm_manager.metrics)
+        finally:
+            if not generation_completed and not error_reported and not self.stop_event.is_set():
+                self.gui.queue_model_error("Model error")
+                self.generation_active = False
 
     def _generation_finished(self) -> None:
         # Called by the GUI only after the final model event and spacing have

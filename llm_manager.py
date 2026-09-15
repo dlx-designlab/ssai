@@ -70,6 +70,9 @@ class LLMManager:
             "model": self.model_name,
             "messages": request_messages,
             "stream": True,
+            "options": {
+                "num_predict": config.NUM_PREDICT,
+            },
         }
 
         start_time = time.perf_counter()
@@ -129,9 +132,13 @@ class LLMManager:
                 on_metrics_update(self.metrics)
 
     def _build_request_messages(self, prompt: str) -> list[dict[str, str]]:
+        system_message = {
+            "role": "system",
+            "content": config.SYSTEM_PROMPT,
+        }
         if self.history_enabled:
-            return [*self.messages, {"role": "user", "content": prompt}]
-        return [{"role": "user", "content": prompt}]
+            return [system_message, *self.messages, {"role": "user", "content": prompt}]
+        return [system_message, {"role": "user", "content": prompt}]
 
     def _reset_current_metrics(self) -> None:
         self.metrics.ttft_seconds = None

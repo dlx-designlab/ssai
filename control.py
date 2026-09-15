@@ -31,6 +31,12 @@ def format_rate(value) -> str:
     return "--" if value is None else f"{value:.1f}"
 
 
+def format_ram(used, total, percent) -> str:
+    if used is None or total is None or percent is None:
+        return "--"
+    return f"{used:.1f} / {total:.1f} GB ({percent:.0f}%)"
+
+
 def read_status(path: Path) -> dict | None:
     try:
         if time.time() - path.stat().st_mtime > config.STATUS_STALE_AFTER_SECONDS:
@@ -59,7 +65,9 @@ def render(status: dict | None) -> None:
     print()
     print("HARDWARE")
     print(f"CPU:  {format_percent(hardware.get('cpu_percent'))}")
-    print(f"RAM:  {format_percent(hardware.get('ram_percent'))}")
+    print(
+        f"RAM:  {format_ram(hardware.get('ram_used_gb'), hardware.get('ram_total_gb'), hardware.get('ram_percent'))}"
+    )
     print(f"Temp: {format_temperature(hardware.get('temperature_c'))}")
     print()
     print("MODEL")

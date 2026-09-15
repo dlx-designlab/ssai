@@ -34,6 +34,8 @@ class StatusStore:
         data = {
             "hardware": {
                 "cpu_percent": self._hardware.cpu_percent,
+                "ram_used_gb": self._hardware.ram_used_gb,
+                "ram_total_gb": self._hardware.ram_total_gb,
                 "ram_percent": self._hardware.ram_percent,
                 "temperature_c": self._hardware.temperature_c,
             },
