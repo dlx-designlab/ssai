@@ -58,6 +58,12 @@ def render(status: dict | None) -> None:
 
     print(f"{model.get('model_name', config.MODEL_NAME)} | {model_status}")
     print()
+    print("VOICE")
+    print(f"Input: {status.get('input', '--')}")
+    print(f"State: {status.get('state', '--')}")
+    print(f"STT Time: {format_seconds(status.get('stt_time_seconds'))}")
+    print(f"TTS Time: {format_seconds(status.get('tts_time_seconds'))}")
+    print()
     print("HARDWARE")
     print(f"CPU:  {format_percent(hardware.get('cpu_percent'))}")
     print(
@@ -119,6 +125,10 @@ class Dashboard:
         return [
             "=" * 42,
             "LIVE HARDWARE",
+            f"Input: {status.get('input', '--')}",
+            f"State: {status.get('state', '--')}",
+            f"STT Time: {format_seconds(status.get('stt_time_seconds'))}",
+            f"TTS Time: {format_seconds(status.get('tts_time_seconds'))}",
             f"CPU:  {format_percent(hardware.get('cpu_percent'))}",
             f"RAM:  {format_ram(hardware.get('ram_used_gb'), hardware.get('ram_total_gb'), hardware.get('ram_percent'))}",
             f"Temp: {format_temperature(hardware.get('temperature_c'))}",

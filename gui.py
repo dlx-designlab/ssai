@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import queue
 import tkinter as tk
-import tkinter.font as tkfont
 from collections.abc import Callable
 
 import config
@@ -16,19 +15,20 @@ class ConversationGUI:
         root: tk.Tk,
         on_submit: Callable[[str], bool],
         on_exit: Callable[[], None],
-        on_generation_finished: Callable[[], None],
+        on_response_ready: Callable[[bool], None],
     ):
         self.root = root
         self.on_submit = on_submit
         self.on_exit = on_exit
-        self.on_generation_finished = on_generation_finished
-        self.stream_queue: queue.Queue[tuple[str, str | None]] = queue.Queue()
+        self.on_response_ready = on_response_ready
+        self.response_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self.follow_output = True
+        self.input_enabled = True
 
         self._configure_window()
         self._build_widgets()
         self._bind_keys()
-        self.root.after(config.GUI_STREAM_POLL_MS, self._process_stream_queue)
+        self.root.after(config.GUI_STREAM_POLL_MS, self._process_response_queue)
 
     def _configure_window(self) -> None:
         self.root.title(config.PROGRAM_NAME)
@@ -77,20 +77,15 @@ class ConversationGUI:
         self.scroll_indicator.pack(fill="y", side="right")
         self.transcript.pack(fill="both", expand=True)
         self.scroll_indicator.bind("<Configure>", self._update_scroll_indicator)
-        ctx_font = tkfont.Font(
-            self.root,
-            family=config.CHAT_FONT_FAMILY,
-            size=config.CHAT_FONT_SIZE,
-            overstrike=not config.CONVERSATION_HISTORY,
-        )
-        self.ctx_indicator = tk.Label(
+        self.state_label = tk.Label(
             transcript_frame,
-            text="CTX",
+            text="RDY",
             bg=config.TEXT_BACKGROUND,
             fg=config.TEXT_FOREGROUND,
-            font=ctx_font,
+            font=font,
+            takefocus=False,
         )
-        self.ctx_indicator.place(
+        self.state_label.place(
             relx=1.0,
             x=-config.DISPLAY_MARGIN,
             y=config.DISPLAY_MARGIN,
@@ -130,29 +125,37 @@ class ConversationGUI:
             self.root.bind_all(config.TECHNICIAN_EXIT_SHORTCUT, self._technician_exit)
 
     def _submit_from_entry(self, _event=None):
+        if not self.input_enabled:
+            self.input_entry.delete(0, "end")
+            return "break"
+
         prompt = self.input_entry.get().strip()
         if not prompt:
             return "break"
 
         accepted = self.on_submit(prompt)
-        if accepted:
+        if accepted or not self.input_enabled:
             self.input_entry.delete(0, "end")
         return "break"
+
+    def set_system_state(self, state: str) -> None:
+        self.state_label.configure(text=state)
+        self.input_enabled = state == "RDY"
+        if self.input_enabled:
+            self.input_entry.configure(state="normal")
+            self.input_entry.focus_set()
+        else:
+            self.input_entry.delete(0, "end")
+            self.input_entry.configure(state="disabled")
 
     def add_user_message(self, text: str) -> None:
         self._append_transcript(f"{config.USER_PREFIX}{text}\n")
 
-    def start_model_message(self) -> None:
-        self._append_transcript(config.MODEL_PREFIX)
+    def queue_model_response(self, text: str, tts_error: str | None = None) -> None:
+        self.response_queue.put(("response", (text, tts_error)))
 
-    def queue_model_chunk(self, chunk: str) -> None:
-        self.stream_queue.put(("chunk", chunk))
-
-    def queue_model_complete(self) -> None:
-        self.stream_queue.put(("complete", None))
-
-    def queue_model_error(self, text: str) -> None:
-        self.stream_queue.put(("error", text))
+    def queue_model_error(self) -> None:
+        self.response_queue.put(("error", None))
 
     def clear_conversation(self) -> None:
         self.transcript.configure(state="normal")
@@ -161,44 +164,27 @@ class ConversationGUI:
         self.follow_output = True
         self._update_scroll_indicator()
 
-    def _process_stream_queue(self) -> None:
-        # Coalesce chunks that arrived during the same GUI tick. This keeps the
-        # streaming appearance while avoiding one Text redraw per model chunk.
-        pending_text: list[str] = []
-
+    def _process_response_queue(self) -> None:
         try:
             while True:
-                event_type, payload = self.stream_queue.get_nowait()
+                event_type, payload = self.response_queue.get_nowait()
 
-                if event_type == "chunk" and payload is not None:
-                    pending_text.append(payload)
-                    continue
-
-                if pending_text:
-                    self._append_transcript("".join(pending_text))
-                    pending_text.clear()
-
-                if event_type == "error" and payload is not None:
-                    self._append_transcript(payload)
+                if event_type == "error":
+                    self.on_response_ready(False)
+                elif event_type == "response":
+                    text, tts_error = payload
+                    self._append_transcript(f"{config.MODEL_PREFIX}{text}")
                     self._finish_model_spacing()
-                    self.on_generation_finished()
-                elif event_type == "complete":
-                    self._finish_model_spacing()
-                    self.on_generation_finished()
+                    self.on_response_ready(tts_error is None)
 
         except queue.Empty:
             pass
 
-        if pending_text:
-            self._append_transcript("".join(pending_text))
-
         if self.root.winfo_exists():
-            self.root.after(config.GUI_STREAM_POLL_MS, self._process_stream_queue)
+            self.root.after(config.GUI_STREAM_POLL_MS, self._process_response_queue)
 
-    def show_model_error(self, text: str) -> None:
-        """Show a model error immediately when already running on the GUI thread."""
-        self._append_transcript(text)
-        self._finish_model_spacing()
+    def show_voice_result(self, text: str) -> None:
+        self._append_transcript(f"VOICE: {text or '(no speech recognized)'}\n")
 
     def _finish_model_spacing(self) -> None:
         # N blank lines between the model response and the next YOU line require

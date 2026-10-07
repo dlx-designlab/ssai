@@ -20,9 +20,36 @@ Ignore minor spelling or typing errors when the user's meaning is clear.
 MODEL_NAME = "phi3.5:latest"
 OLLAMA_API_BASE = "http://127.0.0.1:11434/api"
 NUM_PREDICT = 150
-CONVERSATION_HISTORY = True
+CONVERSATION_HISTORY = False
 REQUEST_TIMEOUT_SECONDS = 10
 GENERATION_SHUTDOWN_TIMEOUT = 1.0
+
+# Voice audio and STT
+VOICE_AUDIO_INPUT_DEVICE = "plughw:2,0"
+VOICE_RECORDING_DURATION = 10
+VOICE_MAX_RECORDING_DURATION = 15
+VOICE_AUDIO_SAMPLE_RATE = 16000
+VOICE_AUDIO_CHANNELS = 1
+VOICE_AUDIO_BIT_DEPTH = 16
+VOICE_BUTTON_INPUT_DEVICE = (
+    "/dev/input/by-id/usb-Telink_Wireless_Receiver-if01-event-kbd"
+)
+VOICE_BUTTON_KEY_NAME = "F8"
+VOICE_BUTTON_KEY_CODE = 66
+VOICE_STT_EXECUTABLE = "../voice_test/vendor/whisper.cpp/build/bin/whisper-cli"
+VOICE_STT_MODEL = "../voice_test/vendor/whisper.cpp/models/ggml-base.bin"
+VOICE_STT_LANGUAGE = "en"
+VOICE_INPUT_FILENAME = "input.wav"
+VOICE_TRANSCRIPT_FILENAME = "transcript.txt"
+
+# Voice TTS and playback
+VOICE_PIPER_EXECUTABLE = "../voice_test/.venv/bin/piper"
+VOICE_PIPER_MODEL = "../voice_test/models/piper/en_US-lessac-medium.onnx"
+VOICE_OUTPUT_FILENAME = "output.wav"
+VOICE_AUDIO_OUTPUT_DEVICE = (
+    "alsa_output.usb-Seeed_Studio_ReSpeaker_Lite_0000000001-00.analog-stereo"
+)
+VOICE_OUTPUT_VOLUME = 5
 
 # Hardware monitoring / SSH control interface
 # The main process samples hardware every 15 seconds.

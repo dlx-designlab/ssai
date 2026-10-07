@@ -22,6 +22,10 @@ class StatusStore:
         self._question_count = 0
         self._current_question: str | None = None
         self._completed_turn: dict | None = None
+        self._input = "KEYBOARD"
+        self._state = "RDY"
+        self._stt_time_seconds: float | None = None
+        self._tts_time_seconds: float | None = None
 
     def update_hardware(self, hardware: HardwareSnapshot) -> None:
         with self._lock:
@@ -31,6 +35,26 @@ class StatusStore:
     def update_model(self, model: ModelMetrics) -> None:
         with self._lock:
             self._model = ModelMetrics(**vars(model))
+            self._write_locked()
+
+    def update_input(self, input_source: str) -> None:
+        with self._lock:
+            self._input = input_source
+            self._write_locked()
+
+    def update_state(self, state: str) -> None:
+        with self._lock:
+            self._state = state
+            self._write_locked()
+
+    def update_stt_time(self, seconds: float | None) -> None:
+        with self._lock:
+            self._stt_time_seconds = seconds
+            self._write_locked()
+
+    def update_tts_time(self, seconds: float | None) -> None:
+        with self._lock:
+            self._tts_time_seconds = seconds
             self._write_locked()
 
     def submit_question(self, question: str) -> None:
@@ -81,6 +105,10 @@ class StatusStore:
         data = {
             "hardware": self._hardware_data_locked(),
             "model": self._model_data_locked(),
+            "input": self._input,
+            "state": self._state,
+            "stt_time_seconds": self._stt_time_seconds,
+            "tts_time_seconds": self._tts_time_seconds,
             "question_count": self._question_count,
             "current_question": self._current_question,
             "generation": "GENERATING" if self._model.active else "IDLE",
