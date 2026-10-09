@@ -2,6 +2,16 @@
 
 This document records the main work completed on SSAI, organized by date.
 
+## 2026-10-09
+
+- Updated the README to describe the current keyboard and voice workflows,
+  Context controls, application states, restart and scrolling controls, and
+  progressive text presentation during audio playback.
+- Documented the verified hardware and software environment, project structure,
+  and application and Dashboard launch commands.
+- No prototype photograph was available in the workspace; the README image
+  remains pending a project-supplied photograph.
+
 ## 2026-09-15
 
 - Reviewed all Python modules for syntax and consistency.

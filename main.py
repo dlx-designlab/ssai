@@ -12,6 +12,7 @@ import time
 import tkinter as tk
 from enum import Enum
 
+import psutil
 import requests
 
 import config
@@ -25,7 +26,7 @@ from voice.recording import (
     stop_button_recording,
     transcribe_audio,
 )
-from voice.tts import generate_speech, play_output
+from voice.tts import generate_speech, get_audio_duration_seconds, play_output
 
 
 class SystemState(str, Enum):
@@ -57,6 +58,8 @@ class SSAIApplication:
         self.voice_events: queue.Queue[tuple[str, object]] = queue.Queue()
         self.state_lock = threading.Lock()
         self.system_state = SystemState.RDY
+        self.restart_requested = False
+        self.turn_id = 0
         self.last_error_message: str | None = None
         self.button_down = False
         self.voice_recording_process: subprocess.Popen[str] | None = None
@@ -77,6 +80,9 @@ class SSAIApplication:
             on_submit=self._handle_prompt,
             on_exit=self._request_exit,
             on_response_ready=self._response_ready,
+            on_toggle_context=self.llm_manager.toggle_context,
+            context_enabled=self.llm_manager.history_enabled,
+            on_restart=self._request_restart,
         )
         self.gui.set_system_state(self.system_state.value)
         self._start_button_thread()
@@ -86,6 +92,9 @@ class SSAIApplication:
             self.root.mainloop()
         finally:
             self._shutdown()
+
+        if self.restart_requested:
+            self._restart_application()
 
     def _handle_prompt(self, prompt: str) -> bool:
         if self.stop_event.is_set() or self.gui is None:
@@ -104,8 +113,10 @@ class SSAIApplication:
     def _submit_turn(self, prompt: str) -> None:
         if self.gui is None:
             return
+        self.turn_id += 1
+        turn_id = self.turn_id
         self.status_store.submit_question(prompt)
-        self.gui.add_user_message(prompt)
+        self.gui.add_user_message(prompt, turn_id)
 
         if not self.llm_manager.metrics.available:
             self._log_error("LLM unavailable")
@@ -117,7 +128,7 @@ class SSAIApplication:
             self._set_system_state(SystemState.ERR)
             return
 
-        self._start_generation(prompt)
+        self._start_generation(prompt, turn_id)
 
     def _submit_voice_transcript(self, transcript: str) -> None:
         if self._get_system_state() is not SystemState.PROC:
@@ -128,11 +139,11 @@ class SSAIApplication:
             return
         self._submit_turn(prompt)
 
-    def _start_generation(self, prompt: str) -> None:
+    def _start_generation(self, prompt: str, turn_id: int) -> None:
         try:
             self.generation_thread = threading.Thread(
                 target=self._generation_loop,
-                args=(prompt,),
+                args=(prompt, turn_id),
                 name="ssai-generation-loop",
                 daemon=True,
             )
@@ -140,7 +151,7 @@ class SSAIApplication:
         except RuntimeError as exc:
             self._enter_error(f"Could not start LLM generation: {exc}")
 
-    def _generation_loop(self, prompt: str) -> None:
+    def _generation_loop(self, prompt: str, turn_id: int) -> None:
         assert self.gui is not None
         generation_completed = False
         error_reported = False
@@ -163,9 +174,11 @@ class SSAIApplication:
                     success=True,
                 )
                 tts_error = None
+                audio_duration = None
                 tts_started = time.perf_counter()
                 try:
-                    generate_speech(response)
+                    audio_path = generate_speech(response)
+                    audio_duration = get_audio_duration_seconds(audio_path)
                 except (OSError, RuntimeError, ValueError) as exc:
                     tts_error = f"Speech generation failed: {exc}"
                     self._log_error(tts_error)
@@ -173,7 +186,12 @@ class SSAIApplication:
                     self.status_store.update_tts_time(
                         time.perf_counter() - tts_started
                     )
-                self.gui.queue_model_response(response, tts_error)
+                self.gui.queue_model_response(
+                    response,
+                    audio_duration,
+                    tts_error,
+                    turn_id,
+                )
 
         except (
             requests.RequestException,
@@ -185,7 +203,7 @@ class SSAIApplication:
         ) as exc:
             self._log_error(f"LLM generation failed: {exc}")
             if not self.stop_event.is_set():
-                self.gui.queue_model_error()
+                self.gui.queue_model_error(turn_id)
                 error_reported = True
             self._update_model_status(self.llm_manager.metrics)
             if not self.stop_event.is_set():
@@ -196,14 +214,14 @@ class SSAIApplication:
                 )
         finally:
             if not generation_completed and not error_reported and not self.stop_event.is_set():
-                self.gui.queue_model_error()
+                self.gui.queue_model_error(turn_id)
                 self.status_store.complete_turn(
                     answer="".join(response_parts) or None,
                     success=False,
                     error="generation_error",
                 )
 
-    def _response_ready(self, tts_ready: bool) -> None:
+    def _response_ready(self, tts_ready: bool, turn_id: int) -> None:
         if not tts_ready:
             self._set_system_state(SystemState.ERR)
             return
@@ -211,21 +229,26 @@ class SSAIApplication:
         self._set_system_state(SystemState.SPK)
         self.playback_thread = threading.Thread(
             target=self._play_response,
+            args=(turn_id,),
             name="ssai-voice-playback",
             daemon=True,
         )
         try:
             self.playback_thread.start()
         except RuntimeError as exc:
+            if self.gui is not None:
+                self.gui.finish_progressive_response(turn_id)
             self._enter_error(f"Could not start audio playback: {exc}")
 
-    def _play_response(self) -> None:
+    def _play_response(self, turn_id: int) -> None:
         try:
             play_output()
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
-            self.voice_events.put(("error", f"Audio playback failed: {exc}"))
+            self.voice_events.put(
+                ("playback_error", (turn_id, f"Audio playback failed: {exc}"))
+            )
             return
-        self.voice_events.put(("playback_complete", None))
+        self.voice_events.put(("playback_complete", turn_id))
 
     def _get_system_state(self) -> SystemState:
         with self.state_lock:
@@ -302,8 +325,18 @@ class SSAIApplication:
             elif event_type == "transcribed":
                 self._submit_voice_transcript(str(payload))
             elif event_type == "playback_complete":
-                if self._get_system_state() is SystemState.SPK:
-                    self._set_system_state(SystemState.RDY)
+                turn_id = int(payload)
+                if turn_id == self.turn_id:
+                    if self.gui is not None:
+                        self.gui.finish_progressive_response(turn_id)
+                    if self._get_system_state() is SystemState.SPK:
+                        self._set_system_state(SystemState.RDY)
+            elif event_type == "playback_error":
+                turn_id, message = payload
+                if turn_id == self.turn_id:
+                    if self.gui is not None:
+                        self.gui.finish_progressive_response(turn_id)
+                    self._enter_error(str(message))
             elif event_type == "error":
                 self._enter_error(str(payload))
 
@@ -473,8 +506,27 @@ class SSAIApplication:
 
     def _request_exit(self) -> None:
         self.stop_event.set()
+        if self.gui is not None:
+            self.gui.cancel_progressive_response()
         if self.root is not None and self.root.winfo_exists():
             self.root.quit()
+
+    def _request_restart(self) -> None:
+        self.restart_requested = True
+        self.llm_manager.clear_history()
+        self._request_exit()
+
+    def _restart_application(self) -> None:
+        script_path = os.path.abspath(sys.argv[0])
+        command = [sys.executable, script_path, *sys.argv[1:]]
+        try:
+            os.execv(sys.executable, command)
+        except OSError as exc:
+            self._log_error(f"Could not replace SSAI process: {exc}")
+            try:
+                subprocess.Popen(command)
+            except OSError as fallback_exc:
+                self._log_error(f"Could not start SSAI replacement: {fallback_exc}")
 
     def _install_signal_handlers(self) -> None:
         signal.signal(signal.SIGTERM, self._signal_handler)
@@ -518,6 +570,11 @@ class SSAIApplication:
         if self.generation_thread and self.generation_thread.is_alive():
             self.generation_thread.join(timeout=config.GENERATION_SHUTDOWN_TIMEOUT)
 
+        if self.restart_requested:
+            self._stop_child_processes()
+            if self.playback_thread and self.playback_thread.is_alive():
+                self.playback_thread.join(timeout=1.0)
+
         self.status_store.clear()
 
         if self.root is not None:
@@ -525,6 +582,27 @@ class SSAIApplication:
                 self.root.destroy()
             except tk.TclError:
                 pass
+
+    def _stop_child_processes(self) -> None:
+        try:
+            children = psutil.Process().children(recursive=True)
+        except psutil.Error as exc:
+            self._log_error(f"Could not find SSAI child processes: {exc}")
+            return
+
+        for child in children:
+            try:
+                child.terminate()
+            except psutil.Error:
+                pass
+
+        _, remaining = psutil.wait_procs(children, timeout=1.0)
+        for child in remaining:
+            try:
+                child.kill()
+            except psutil.Error:
+                pass
+        psutil.wait_procs(remaining, timeout=1.0)
 
 
 def main() -> None:

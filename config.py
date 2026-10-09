@@ -2,7 +2,7 @@
 # Keep prototype parameters here so the main program logic stays simple.
 
 PROGRAM_NAME = "SSAI"
-PROGRAM_VERSION = "V4"
+PROGRAM_VERSION = "V5"
 SYSTEM_PROMPT = """Answer the user's question directly with the shortest response that provides a complete and correct answer.
 
 Prefer one sentence when it is sufficient. As a general rule, do not exceed 50 words. This is a maximum, not a target.
@@ -21,6 +21,7 @@ MODEL_NAME = "phi3.5:latest"
 OLLAMA_API_BASE = "http://127.0.0.1:11434/api"
 NUM_PREDICT = 150
 CONVERSATION_HISTORY = False
+CONTEXT_MAX_TURNS = 4
 REQUEST_TIMEOUT_SECONDS = 10
 GENERATION_SHUTDOWN_TIMEOUT = 1.0
 
@@ -75,6 +76,10 @@ CHAT_FONT_SIZE = 16
 DISPLAY_MARGIN = 8
 GUI_STREAM_POLL_MS = 40
 SCROLL_LINES_PER_KEYPRESS = 2
+RESTART_CONFIRM_WINDOW_SEC = 3
+# Text reveal lead relative to estimated audio position; group size is in words.
+TEXT_AUDIO_LEAD_MS = 300
+TEXT_AUDIO_WORDS_PER_GROUP = 3
 
 # Conversation format
 USER_PREFIX = "ME: "

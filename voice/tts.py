@@ -58,6 +58,12 @@ def generate_speech(text: str) -> Path:
     return output
 
 
+def get_audio_duration_seconds(audio_path: Path) -> float:
+    """Return the duration of a generated WAV file in seconds."""
+    with wave.open(str(audio_path), "rb") as audio:
+        return audio.getnframes() / audio.getframerate()
+
+
 def play_output() -> None:
     """Play SSAI's generated output.wav and wait for playback to finish."""
     output = _project_path(config.VOICE_OUTPUT_FILENAME)

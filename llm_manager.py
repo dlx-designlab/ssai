@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import json
+import threading
 import time
 from typing import Callable, Iterator
 
@@ -26,6 +27,8 @@ class LLMManager:
         self.api_base = config.OLLAMA_API_BASE.rstrip("/")
         self.history_enabled = config.CONVERSATION_HISTORY
         self.messages: list[dict[str, str]] = []
+        self._history_lock = threading.Lock()
+        self._history_revision = 0
         self.metrics = ModelMetrics(model_name=self.model_name)
 
     def check_availability(self) -> tuple[bool, str]:
@@ -53,19 +56,34 @@ class LLMManager:
         return True, ""
 
     def clear_history(self) -> None:
-        self.messages.clear()
+        with self._history_lock:
+            self.messages.clear()
+            self._history_revision += 1
+
+    def toggle_context(self) -> bool:
+        with self._history_lock:
+            self.history_enabled = not self.history_enabled
+            self.messages.clear()
+            self._history_revision += 1
+            return self.history_enabled
 
     def stream_response(
         self,
         prompt: str,
         on_metrics_update: Callable[[ModelMetrics], None] | None = None,
     ) -> Iterator[str]:
+        with self._history_lock:
+            context_enabled = self.history_enabled
+            history_revision = self._history_revision
+            if context_enabled and config.CONTEXT_MAX_TURNS < 1:
+                raise ValueError("CONTEXT_MAX_TURNS must be at least 1.")
+            request_messages = self._build_request_messages(prompt)
+
         self._reset_current_metrics()
         self.metrics.active = True
         if on_metrics_update:
             on_metrics_update(self.metrics)
 
-        request_messages = self._build_request_messages(prompt)
         payload = {
             "model": self.model_name,
             "messages": request_messages,
@@ -119,9 +137,20 @@ class LLMManager:
             self._apply_final_metrics(final_data)
 
             assistant_text = "".join(response_parts)
-            if self.history_enabled:
-                self.messages.append({"role": "user", "content": prompt})
-                self.messages.append({"role": "assistant", "content": assistant_text})
+            if context_enabled:
+                with self._history_lock:
+                    if (
+                        self.history_enabled
+                        and self._history_revision == history_revision
+                    ):
+                        self.messages.extend(
+                            (
+                                {"role": "user", "content": prompt},
+                                {"role": "assistant", "content": assistant_text},
+                            )
+                        )
+                        maximum_messages = config.CONTEXT_MAX_TURNS * 2
+                        del self.messages[:-maximum_messages]
 
         except requests.RequestException:
             self.metrics.available = False
